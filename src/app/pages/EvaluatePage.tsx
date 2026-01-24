@@ -14,48 +14,12 @@ interface JudgeVerdict {
 }
 
 // Mock verdicts for demonstration
-const mockVerdicts: JudgeVerdict[] = [
-  {
-    judgeId: "corporate",
-    score: 7,
-    feedback: [
-      "Strong business model potential with clear revenue streams",
-      "Market size is well-defined but could be more ambitious",
-      "ROI timeline seems realistic for hackathon scope"
-    ],
-    improvement: "Add more concrete metrics around expected user acquisition costs"
-  },
-  {
-    judgeId: "research",
-    score: 9,
-    feedback: [
-      "Novel approach to solving the problem using innovative tech",
-      "Technical architecture is sound and well-thought-out",
-      "Great use of emerging technologies in a practical way"
-    ],
-    improvement: "Consider adding more documentation on the technical implementation details"
-  },
-  {
-    judgeId: "vc",
-    score: 6,
-    feedback: [
-      "Scalability plan is decent but needs more detail",
-      "Team composition looks good for initial development",
-      "Market timing seems appropriate"
-    ],
-    improvement: "Develop a clearer go-to-market strategy for rapid scaling"
-  },
-  {
-    judgeId: "community",
-    score: 8,
-    feedback: [
-      "Excellent focus on social impact and community benefit",
-      "Addresses a real pain point for the target audience",
-      "Inclusive design considerations are well thought out"
-    ],
-    improvement: "Expand on how you'll measure and track community impact metrics"
-  }
-];
+// Mock verdicts removed - using real AI evaluation
+
+import { scrapeHackathon, checkConsistencyAndEvaluate, type EvaluationResult } from "@/app/services/evaluation";
+import { toast } from "sonner"; // Assuming sonner is installed as seen in package.json
+
+// ... existing imports ...
 
 export function EvaluatePage() {
   const [hackathonLink, setHackathonLink] = useState("");
@@ -63,23 +27,53 @@ export function EvaluatePage() {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [currentJudgeIndex, setCurrentJudgeIndex] = useState(0);
   const [verdicts, setVerdicts] = useState<JudgeVerdict[]>([]);
+  const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
+  const [loadingMessage, setLoadingMessage] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!hackathonLink || !solution) {
+      return;
+    }
+
+    const firecrawlKey = import.meta.env.VITE_FIRECRAWL_API_KEY;
+    const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+    if (!firecrawlKey || !geminiKey) {
+      toast.error("Missing API Keys. Please check your .env file.");
       return;
     }
 
     setIsEvaluating(true);
     setVerdicts([]);
     setCurrentJudgeIndex(0);
+    setLoadingMessage("Scraping hackathon guidelines...");
 
-    // Simulate judge evaluations with delays
-    for (let i = 0; i < mockVerdicts.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 3500));
-      setVerdicts(prev => [...prev, mockVerdicts[i]]);
-      setCurrentJudgeIndex(i + 1);
+    try {
+      // 1. Scrape
+      const guidelines = await scrapeHackathon(hackathonLink, firecrawlKey);
+
+      setLoadingMessage("Judges are deliberating (calling Gemini)...");
+
+      // 2. Evaluate
+      const result = await checkConsistencyAndEvaluate(guidelines, solution, geminiKey);
+      setEvaluationResult(result);
+      setLoadingMessage("");
+
+      // 3. Reveal Judges
+      for (let i = 0; i < result.verdicts.length; i++) {
+        setLoadingMessage(`Judge ${i + 1} is speaking...`);
+        await new Promise(resolve => setTimeout(resolve, 3500));
+        setVerdicts(prev => [...prev, result.verdicts[i]]);
+        setCurrentJudgeIndex(i + 1);
+      }
+      setLoadingMessage("");
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Evaluation failed. Please try again.");
+      setIsEvaluating(false);
     }
   };
 
@@ -156,7 +150,7 @@ export function EvaluatePage() {
                     className="mt-6 text-center"
                   >
                     <p className="text-sm text-neutral-600">
-                      Judge {Math.min(currentJudgeIndex + 1, 4)} of 4 is speaking...
+                      {loadingMessage || `Judge ${Math.min(currentJudgeIndex + 1, 4)} of 4 is speaking...`}
                     </p>
                   </motion.div>
                 )}
@@ -174,6 +168,8 @@ export function EvaluatePage() {
                 verdicts={verdicts}
                 currentJudgeIndex={currentJudgeIndex}
                 isEvaluating={isEvaluating}
+                overallStrengths={evaluationResult?.overallStrengths}
+                overallWeaknesses={evaluationResult?.overallWeaknesses}
               />
             </motion.div>
           </div>

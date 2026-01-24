@@ -51,9 +51,11 @@ interface JudgePanelProps {
   verdicts: JudgeVerdict[];
   currentJudgeIndex: number;
   isEvaluating: boolean;
+  overallStrengths?: string[];
+  overallWeaknesses?: string[];
 }
 
-export function JudgePanel({ verdicts, currentJudgeIndex, isEvaluating }: JudgePanelProps) {
+export function JudgePanel({ verdicts, currentJudgeIndex, isEvaluating, overallStrengths, overallWeaknesses }: JudgePanelProps) {
   const [showFinalVerdict, setShowFinalVerdict] = useState(false);
 
   useEffect(() => {
@@ -70,10 +72,10 @@ export function JudgePanel({ verdicts, currentJudgeIndex, isEvaluating }: JudgeP
     ? Math.round(verdicts.reduce((sum, v) => sum + v.score, 0) / verdicts.length * 10) / 10
     : 0;
 
-  // Get strengths and weaknesses
+  // Get strengths and weaknesses (use props if available, else derive from feedback)
   const allFeedback = verdicts.flatMap(v => v.feedback);
-  const strengths = allFeedback.slice(0, 3);
-  const weaknesses = allFeedback.slice(3, 6);
+  const strengths = overallStrengths || allFeedback.slice(0, 3);
+  const weaknesses = overallWeaknesses || allFeedback.slice(3, 6);
 
   return (
     <div className="min-h-[600px] relative">
@@ -113,9 +115,8 @@ export function JudgePanel({ verdicts, currentJudgeIndex, isEvaluating }: JudgeP
                       filter: isActive ? "blur(0px)" : "blur(1px)"
                     }}
                     transition={{ duration: 0.5, ease: "easeInOut" }}
-                    className={`${judge.color} p-6 rounded-lg border-2 ${
-                      isActive ? "border-neutral-900" : "border-transparent"
-                    }`}
+                    className={`${judge.color} p-6 rounded-lg border-2 ${isActive ? "border-neutral-900" : "border-transparent"
+                      }`}
                   >
                     {/* Judge Avatar Placeholder */}
                     <div className="w-20 h-20 bg-neutral-300 rounded-full mx-auto mb-4 relative overflow-hidden">
@@ -290,8 +291,8 @@ export function JudgePanel({ verdicts, currentJudgeIndex, isEvaluating }: JudgeP
                     {finalScore >= 8
                       ? "Excellent! Your idea is hackathon-ready."
                       : finalScore >= 6
-                      ? "Good foundation. Consider the improvements suggested."
-                      : "Needs refinement. Focus on the key areas highlighted."}
+                        ? "Good foundation. Consider the improvements suggested."
+                        : "Needs refinement. Focus on the key areas highlighted."}
                   </p>
                 </motion.div>
               </motion.div>
